@@ -1,8 +1,8 @@
 import os
 import logging
+import requests
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import aiohttp
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # ===== КОНФИГУРАЦИЯ =====
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -17,24 +17,24 @@ if not BOT_TOKEN:
     print("❌ ОШИБКА: BOT_TOKEN не установлен!")
     exit(1)
 
-async def start(update, context):
+def start(update: Update, context: CallbackContext):
     """Обработчик команды /start"""
-    await update.message.reply_text(
+    update.message.reply_text(
         "🤖 *DeepSeek AI Assistant запущен!*\n\n"
         "Задавайте любые вопросы и я помогу!",
         parse_mode='Markdown'
     )
 
-async def handle_message(update, context):
+def handle_message(update: Update, context: CallbackContext):
     """Обработка всех сообщений"""
     user_text = update.message.text
     
     # Показываем индикатор набора
-    await update.message.chat.send_action(action="typing")
+    context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
         if not DEEPSEEK_KEY:
-            await update.message.reply_text("❌ API ключ не настроен")
+            update.message.reply_text("❌ API ключ не настроен")
             return
             
         headers = {
@@ -49,37 +49,37 @@ async def handle_message(update, context):
             "temperature": 0.7
         }
         
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                json=data,
-                headers=headers,
-                timeout=30
-            ) as response:
-                
-                if response.status == 200:
-                    result = await response.json()
-                    answer = result["choices"][0]["message"]["content"]
-                    await update.message.reply_text(answer)
-                else:
-                    error_text = await response.text()
-                    await update.message.reply_text(f"❌ Ошибка API: {response.status}")
+        response = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            json=data,
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            answer = result["choices"][0]["message"]["content"]
+            update.message.reply_text(answer)
+        else:
+            update.message.reply_text(f"❌ Ошибка API: {response.status_code}")
                     
     except Exception as e:
         logging.error(f"Error: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
+        update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
 
 def main():
     """Основная функция"""
     print("🚀 Запуск бота...")
     
-    # Создаем Updater и Dispatcher
-    updater = Updater(BOT_TOKEN, use_context=True)
+    # Создаем Updater (старая версия API)
+    updater = Updater(token=BOT_TOKEN, use_context=True)
+    
+    # Получаем диспетчер
     dp = updater.dispatcher
     
     # Добавляем обработчики
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text, handle_message))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
     
     print("🤖 Бот запущен и готов к работе!")
     
