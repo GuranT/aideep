@@ -1,7 +1,6 @@
 import os
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import telebot
 from openai import OpenAI
 
 # ===== КОНФИГУРАЦИЯ =====
@@ -16,14 +15,19 @@ if not BOT_TOKEN:
     print("❌ ОШИБКА: BOT_TOKEN не установлен!")
     exit(1)
 
+# Создаем бота
+bot = telebot.TeleBot(BOT_TOKEN)
+
 # Инициализируем клиент DeepSeek
 client = OpenAI(
     api_key=DEEPSEEK_KEY,
     base_url="https://api.deepseek.com"
 )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(
+        message,
         "🤖 *DeepSeek AI Assistant* 🚀\n\n"
         "Задавайте любые вопросы! Я помогу с:\n"
         "• Кодом и программированием\n"
@@ -33,15 +37,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text
-    
-    # Показываем индикатор набора
-    await update.message.chat.send_action(action="typing")
-    
+@bot.message_handler(func=lambda message: True)
+def handle_message(message):
     try:
+        user_text = message.text
+        
+        # Показываем индикатор набора
+        bot.send_chat_action(message.chat.id, 'typing')
+        
         if not DEEPSEEK_KEY:
-            await update.message.reply_text("❌ API ключ не настроен")
+            bot.reply_to(message, "❌ API ключ не настроен")
             return
         
         # Используем официальный SDK DeepSeek
@@ -56,30 +61,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         answer = response.choices[0].message.content
-        await update.message.reply_text(answer)
+        bot.reply_to(message, answer)
                 
     except Exception as e:
         logging.error(f"Error: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
-
-def main():
-    print("🚀 Запуск бота...")
-    
-    # Создаем Application
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Добавляем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("🤖 Бот запущен и готов к работе!")
-    
-    # Запускаем бота
-    application.run_polling()
+        bot.reply_to(message, "❌ Произошла ошибка. Попробуйте еще раз.")
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    main()
+    print("🚀 Запуск бота...")
+    print("🤖 Бот запущен и готов к работе!")
+    bot.infinity_polling()
