@@ -1,8 +1,7 @@
 import os
 import logging
-import asyncio
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import aiohttp
 
 # ===== КОНФИГУРАЦИЯ =====
@@ -18,7 +17,7 @@ if not BOT_TOKEN:
     print("❌ ОШИБКА: BOT_TOKEN не установлен!")
     exit(1)
 
-async def start(update: Update, context):
+async def start(update, context):
     """Обработчик команды /start"""
     await update.message.reply_text(
         "🤖 *DeepSeek AI Assistant запущен!*\n\n"
@@ -26,7 +25,7 @@ async def start(update: Update, context):
         parse_mode='Markdown'
     )
 
-async def handle_message(update: Update, context):
+async def handle_message(update, context):
     """Обработка всех сообщений"""
     user_text = update.message.text
     
@@ -74,17 +73,19 @@ def main():
     """Основная функция"""
     print("🚀 Запуск бота...")
     
-    # Создаем приложение
-    application = Application.builder().token(BOT_TOKEN).build()
+    # Создаем Updater и Dispatcher
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
     
     # Добавляем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text, handle_message))
     
     print("🤖 Бот запущен и готов к работе!")
     
     # Запускаем бота
-    application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     logging.basicConfig(
