@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ===== КОНФИГУРАЦИЯ =====
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -17,24 +17,24 @@ if not BOT_TOKEN:
     print("❌ ОШИБКА: BOT_TOKEN не установлен!")
     exit(1)
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
-    update.message.reply_text(
+    await update.message.reply_text(
         "🤖 *DeepSeek AI Assistant запущен!*\n\n"
         "Задавайте любые вопросы и я помогу!",
         parse_mode='Markdown'
     )
 
-def handle_message(update: Update, context: CallbackContext):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка всех сообщений"""
     user_text = update.message.text
     
     # Показываем индикатор набора
-    context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    await update.message.chat.send_action(action="typing")
     
     try:
         if not DEEPSEEK_KEY:
-            update.message.reply_text("❌ API ключ не настроен")
+            await update.message.reply_text("❌ API ключ не настроен")
             return
             
         headers = {
@@ -59,33 +59,29 @@ def handle_message(update: Update, context: CallbackContext):
         if response.status_code == 200:
             result = response.json()
             answer = result["choices"][0]["message"]["content"]
-            update.message.reply_text(answer)
+            await update.message.reply_text(answer)
         else:
-            update.message.reply_text(f"❌ Ошибка API: {response.status_code}")
+            await update.message.reply_text(f"❌ Ошибка API: {response.status_code}")
                     
     except Exception as e:
         logging.error(f"Error: {e}")
-        update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
+        await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
 
 def main():
     """Основная функция"""
     print("🚀 Запуск бота...")
     
-    # Создаем Updater (старая версия API)
-    updater = Updater(token=BOT_TOKEN, use_context=True)
-    
-    # Получаем диспетчер
-    dp = updater.dispatcher
+    # Создаем Application
+    application = Application.builder().token(BOT_TOKEN).build()
     
     # Добавляем обработчики
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("🤖 Бот запущен и готов к работе!")
     
     # Запускаем бота
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     logging.basicConfig(
